@@ -1,126 +1,121 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import heapq
+import math
 
-# Funkcja dla heurystyki (odległość Manhattan)
-def heuristic(a, b):
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+def wczytaj_siatke_z_pliku(nazwa_pliku):
+    with open(nazwa_pliku, 'r') as plik:
+        siatka = []
+        for linia in plik:
+            siatka.append([int(x) for x in linia.split()])
+    return siatka
 
-# Algorytm A* z wizualizacją
-def astar(graph, start, goal, visualize=False):
-    open_list = []
-    heapq.heappush(open_list, (0, start))
-    came_from = {}
+def heurystyka(a, b):
+    return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
+def znajdz_sasiadow(siatka, punkt):
+    sasiedzi = []
+    kierunki = [
+        ("dół", (1, 0)),
+        ("lewo", (0, -1)),
+        ("góra", (-1, 0)),
+        ("prawo", (0, 1))
+    ]
+
+    # Dostępne sąsiedzi
+    for kierunek, przesuniecie in kierunki:
+        sasiad = (punkt[0] + przesuniecie[0], punkt[1] + przesuniecie[1])
+        if 0 <= sasiad[0] < len(siatka) and 0 <= sasiad[1] < len(siatka[0]) and siatka[sasiad[0]][sasiad[1]] != 5:
+            sasiedzi.append((kierunek, sasiad))
+    return sasiedzi
+
+# A*
+def astar(siatka, start, cel, wizualizacja=False):
+    if siatka[start[0]][start[1]] == 5:
+        print(f"Błąd: Punkt startowy {start} jest komórką zajętą.")
+        return None
+    if siatka[cel[0]][cel[1]] == 5:
+        print(f"Błąd: Punkt końcowy {cel} jest komórką zajętą.")
+        return None
+    
+    # Ustalamy listę punktów do odwiedzenia
+    otwarta_lista = []
+    heapq.heappush(otwarta_lista, (0, start))
+    poprzednicy = {}
     g_score = {start: 0}
-    f_score = {start: heuristic(start, goal)}
+    f_score = {start: heurystyka(start, cel)}
 
-    if visualize:
+    #Wizualizacja siatki
+    if wizualizacja:
         fig, ax = plt.subplots()
-        ax.set_xticks(np.arange(-0.5, len(graph[0]), 1), minor=True)
-        ax.set_yticks(np.arange(-0.5, len(graph), 1), minor=True)
+        ax.set_xticks(np.arange(-0.5, len(siatka[0]), 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, len(siatka), 1), minor=True)
         ax.grid(which="minor", color="black", linestyle='-', linewidth=1)
 
-        # Rysujemy siatkę
-        for row in range(len(graph)):
-            for col in range(len(graph[0])):
-                if graph[row][col] == 1:  # Zajęte punkty (czarne)
-                    ax.plot(col, row, 's', color='black', ms=20)
-                else:  # Wolne punkty (niebieskie)
-                    ax.plot(col, row, 's', color='lightblue', ms=20)
-
+        for rzad in range(len(siatka)):
+            for kolumna in range(len(siatka[0])):
+                if siatka[rzad][kolumna] == 5:
+                    ax.plot(kolumna, rzad, 's', color='black', ms=20)
+                else:
+                    ax.plot(kolumna, rzad, 's', color='lightblue', ms=20)
         plt.ion()
 
-    while open_list:
-        current = heapq.heappop(open_list)[1]
+    while otwarta_lista:
+        # Bierzemy punkt o najmniejszym f_score
+        obecny = heapq.heappop(otwarta_lista)[1]
 
-        if visualize:
-            # Aktualny punkt - rysujemy go jako zielony (obecnie badany)
-            ax.plot(current[1], current[0], 'o', color='green', ms=15)  
+        if wizualizacja:
+            ax.plot(obecny[1], obecny[0], 'o', color='green', ms=15)
             plt.draw()
-            plt.pause(0.5)  # Opóźnienie dla wizualizacji
+            plt.pause(0.1)
 
-        if current == goal:
-            path = []
-            while current in came_from:
-                path.append(current)
-                current = came_from[current]
-            path.append(start)
-            path.reverse()
+        if obecny == cel:
+            sciezka = []
+            while obecny in poprzednicy:
+                sciezka.append(obecny)
+                obecny = poprzednicy[obecny]
+            sciezka.append(start)
+            sciezka.reverse()
 
-            if visualize:
-                # Rysujemy ścieżkę (czerwona)
-                for node in path:
-                    ax.plot(node[1], node[0], 'o', color='red',ms=10)  
+            if wizualizacja:
+                for punkt in sciezka:
+                    ax.plot(punkt[1], punkt[0], 'o', color='red', ms=10)
                     plt.draw()
-                    plt.pause(0.1)
+                    plt.pause(0.001)
                 plt.ioff()
                 plt.show()
 
-            return path
+            return sciezka
+        
+        #Opracowanie sąsiadów obecnego punktu
+        for kierunek, sasiad in znajdz_sasiadow(siatka, obecny):
+            # Aktualny kierunek
+            print(f"Sprawdzam kierunek: {kierunek}")  
+            koszt_tymczasowy = g_score[obecny] + 1
 
-        for neighbor in get_neighbors(graph, current):
-            tentative_g_score = g_score[current] + 1
+            if koszt_tymczasowy < g_score.get(sasiad, float('inf')):
+                poprzednicy[sasiad] = obecny
+                g_score[sasiad] = koszt_tymczasowy
+                f_score[sasiad] = koszt_tymczasowy + heurystyka(sasiad, cel)
+                if sasiad not in [i[1] for i in otwarta_lista]:
+                    heapq.heappush(otwarta_lista, (f_score[sasiad], sasiad))
 
-            if tentative_g_score < g_score.get(neighbor, float('inf')):
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g_score
-                f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
-                
-                if neighbor not in [i[1] for i in open_list]:
-                    heapq.heappush(open_list, (f_score[neighbor], neighbor))
-
-    if visualize:
+    if wizualizacja:
         plt.ioff()
         plt.show()
-    return None  # Ścieżka nie została znaleziona
-
-# Funkcja, która zwraca sąsiadów danej komórki
-def get_neighbors(graph, node):
-    neighbors = []
-    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Góra, dół, lewo, prawo
-    for direction in directions:
-        neighbor = (node[0] + direction[0], node[1] + direction[1])
-        if 0 <= neighbor[0] < len(graph) and 0 <= neighbor[1] < len(graph[0]) and graph[neighbor[0]][neighbor[1]] != 1:
-            neighbors.append(neighbor)
-    return neighbors
+    return None
 
 if __name__ == "__main__":
-    # Definicja siatki (0 - wolne, 1 - zajęte)
-    graph = [
-        [0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-        [0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0],
-        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1],
-        [0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0],
-        [1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0],
-        [1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0],
-        [0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
-        [1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0],
-        [0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0],
-        [0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0],
-        [1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0],
-        [0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1],
-        [0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0],
-        [0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1],
-        [0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0],
-        [1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0],
-        [1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0]
-    ]
+    siatka = wczytaj_siatke_z_pliku("grid.txt")
 
+    start = (0, 0)
+    cel = (19, 19)
 
-    start_x = int(input("Wpisz X dla 'start' point: "))
-    start_y = int(input("Wpisz Y dla 'start' point: "))
-    start = (start_x, start_y)
+    sciezka = astar(siatka, start, cel, wizualizacja=True)
 
-    end_x = int(input("Wpisz X dla 'end' point: "))
-    end_y = int(input("Wpisz Y dla 'end' point: "))
-    end = (end_x, end_y)
-
-    path = astar(graph, start, end, visualize=True)
-
-    if path:
-        print("Znaleziono ścieżkę:", path)
+    if sciezka:
+        print("Znaleziono ścieżkę:")
+        print(sciezka)
     else:
-        print("Ścieżka nie została znaleziona")
+        print("Nie znaleziono ścieżki.")
+
